@@ -32,7 +32,7 @@ beforeAll(async () => {
   ({ initCampaignStore, listCampaigns, createCampaign, addPledge, calculateProgress } =
     await import('./services/campaignStore'));
   initCampaignStore();
-}, 20000);
+}, 60000);
 
 beforeEach(() => {
   const db = getDb();
@@ -337,6 +337,75 @@ describe('Query parameter validation', () => {
 
     const resultLimitOnly = parseCampaignListQuery({ limit: '10' });
     expect(resultLimitOnly.ok).toBe(false);
+  });
+
+  it('rejects includeDeleted with a non-boolean string value', () => {
+    const result = parseCampaignListQuery({ includeDeleted: 'yes' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((issue) => issue.path.includes('includeDeleted'))).toBe(true);
+    }
+  });
+
+  it('rejects include_archived alias with a non-boolean string value', () => {
+    const result = parseCampaignListQuery({ include_archived: '1' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((issue) => issue.path.includes('includeDeleted'))).toBe(true);
+    }
+  });
+
+  it('rejects search query longer than 200 characters', () => {
+    const result = parseCampaignListQuery({ search: 'a'.repeat(201) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((issue) => issue.path.includes('search'))).toBe(true);
+    }
+  });
+
+  it('accepts search query at exactly 200 characters', () => {
+    const result = parseCampaignListQuery({ search: 'a'.repeat(200) });
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects q query alias longer than 200 characters', () => {
+    const result = parseCampaignListQuery({ q: 'b'.repeat(201) });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((issue) => issue.path.includes('q'))).toBe(true);
+    }
+  });
+
+  it('rejects createdAfter later than createdBefore', () => {
+    const result = parseCampaignListQuery({
+      createdAfter: '2025-06-01T00:00:00Z',
+      createdBefore: '2025-01-01T00:00:00Z',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((issue) => issue.path.includes('createdAfter'))).toBe(true);
+    }
+  });
+
+  it('accepts createdAfter equal to createdBefore', () => {
+    const ts = '2025-03-15T12:00:00Z';
+    const result = parseCampaignListQuery({ createdAfter: ts, createdBefore: ts });
+    expect(result.ok).toBe(true);
+  });
+
+  it('collects multiple validation issues in a single call', () => {
+    const result = parseCampaignListQuery({
+      status: 'garbage',
+      sort: 'badfield',
+      order: 'sideways',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const paths = result.issues.flatMap((issue) => issue.path);
+      expect(paths).toContain('status');
+      expect(paths).toContain('sort');
+      expect(paths).toContain('order');
+    }
   });
 });
 

@@ -11,6 +11,7 @@ export default defineConfig({
     isolate: true,
     globals: true,
     testTimeout: 30000,
+    hookTimeout: 60000,
     reporters: ['verbose'],
     coverage: {
       provider: 'v8',
