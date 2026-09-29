@@ -470,8 +470,27 @@ export function parseCampaignListQuery(
     }
   }
 
-  const search = normalizeQueryValue(query.search);
-  const q = normalizeQueryValue(query.q);
+  const SEARCH_MAX_LENGTH = 200;
+  const searchRaw = normalizeQueryValue(query.search);
+  const qRaw = normalizeQueryValue(query.q);
+
+  if (searchRaw !== undefined && searchRaw.length > SEARCH_MAX_LENGTH) {
+    issues.push({
+      code: 'custom',
+      message: `search must be at most ${SEARCH_MAX_LENGTH} characters.`,
+      path: ['search'],
+    });
+  }
+  if (qRaw !== undefined && qRaw.length > SEARCH_MAX_LENGTH) {
+    issues.push({
+      code: 'custom',
+      message: `q must be at most ${SEARCH_MAX_LENGTH} characters.`,
+      path: ['q'],
+    });
+  }
+
+  const search = searchRaw !== undefined && searchRaw.length <= SEARCH_MAX_LENGTH ? searchRaw : undefined;
+  const q = qRaw !== undefined && qRaw.length <= SEARCH_MAX_LENGTH ? qRaw : undefined;
   const assetCodes = parseAssetCodes(query.asset);
   let asset: string[] | undefined;
   if (query.asset !== undefined && assetCodes === null) {
@@ -584,6 +603,14 @@ export function parseCampaignListQuery(
         path: ['createdBefore'],
       });
     }
+  }
+
+  if (createdAfter !== undefined && createdBefore !== undefined && createdAfter > createdBefore) {
+    issues.push({
+      code: 'custom',
+      message: 'createdAfter must not be later than createdBefore.',
+      path: ['createdAfter'],
+    });
   }
 
   if (issues.length > 0) {

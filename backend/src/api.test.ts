@@ -373,6 +373,96 @@ describe('Campaign List Query Parameter Validation', () => {
     expect(res.status).toBe(200);
     expect(res.data.data).toBeDefined();
   });
+
+  // --- gap coverage added for issue #843 ---
+
+  it('returns 400 for page=0 (boundary below minimum)', async () => {
+    const res = await get('/api/campaigns?page=0&limit=10');
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 400 for includeDeleted with a non-boolean string value', async () => {
+    const res = await get('/api/campaigns?includeDeleted=yes');
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 400 for include_archived alias with a non-boolean string value', async () => {
+    const res = await get('/api/campaigns?include_archived=1');
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 400 with a details array that names the offending field', async () => {
+    const res = await get('/api/campaigns?status=garbage');
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+    expect(Array.isArray(res.data.error.details)).toBe(true);
+    const detail = res.data.error.details[0];
+    expect(typeof detail.field).toBe('string');
+    expect(typeof detail.message).toBe('string');
+    expect(detail.field).toBe('status');
+  });
+
+  it('reports multiple field errors in a single response', async () => {
+    const res = await get('/api/campaigns?status=garbage&sort=badfield&order=sideways');
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+    const fields = res.data.error.details.map((d: { field: string }) => d.field);
+    expect(fields).toContain('status');
+    expect(fields).toContain('sort');
+    expect(fields).toContain('order');
+  });
+
+  it('returns 400 when search query exceeds 200 characters', async () => {
+    const longQuery = 'a'.repeat(201);
+    const res = await get(`/api/campaigns?search=${encodeURIComponent(longQuery)}`);
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+    const fields = res.data.error.details.map((d: { field: string }) => d.field);
+    expect(fields).toContain('search');
+  });
+
+  it('returns 400 when q query alias exceeds 200 characters', async () => {
+    const longQuery = 'b'.repeat(201);
+    const res = await get(`/api/campaigns?q=${encodeURIComponent(longQuery)}`);
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+    const fields = res.data.error.details.map((d: { field: string }) => d.field);
+    expect(fields).toContain('q');
+  });
+
+  it('accepts search query at exactly the 200-character limit', async () => {
+    const exactQuery = 'c'.repeat(200);
+    const res = await get(`/api/campaigns?search=${encodeURIComponent(exactQuery)}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 400 when createdAfter is later than createdBefore', async () => {
+    const res = await get(
+      '/api/campaigns?createdAfter=2025-06-01T00:00:00Z&createdBefore=2025-01-01T00:00:00Z',
+    );
+    expect(res.status).toBe(400);
+    expect(res.data.error.code).toBe('VALIDATION_ERROR');
+    const fields = res.data.error.details.map((d: { field: string }) => d.field);
+    expect(fields).toContain('createdAfter');
+  });
+
+  it('accepts createdAfter equal to createdBefore (same instant)', async () => {
+    const ts = '2025-03-15T12:00:00Z';
+    const res = await get(
+      `/api/campaigns?createdAfter=${encodeURIComponent(ts)}&createdBefore=${encodeURIComponent(ts)}`,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 200 with success:false absent for a valid unpaginated request', async () => {
+    const res = await get('/api/campaigns');
+    expect(res.status).toBe(200);
+    expect(res.data.success).not.toBe(false);
+    expect(Array.isArray(res.data.data)).toBe(true);
+  });
 });
 
 describe('Campaign Filters - createdAfter/createdBefore', () => {
